@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Unterschrift</title>
+<style>
+:root{--bg:#f4f5f2;--panel:#fff;--ink:#1d2321;--muted:#66706c;--line:#dfe3df;--accent:#0f6b5c;--accent-ink:#fff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141816;--panel:#1c2220;--ink:#e7ebe9;--muted:#9aa5a0;--line:#2e3633;--accent:#4fb8a4;--accent-ink:#0d1714}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;-webkit-user-select:none;user-select:none}
+main{max-width:760px;margin:0 auto;padding:14px 16px 24px}
+h1{font-size:20px;margin:0 0 2px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}
+label{display:block;font-size:13px;color:var(--muted);margin:0 0 4px}
+input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--panel);color:var(--ink);-webkit-user-select:text;user-select:text}
+canvas{display:block;width:100%;background:#fff;border:2px dashed #9aa5a0;border-radius:12px;touch-action:none;margin-top:10px}
+.line{position:relative}
+.line:after{content:"";position:absolute;left:6%;right:6%;bottom:28%;border-bottom:1px solid #c8ceca;pointer-events:none}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.btn{flex:1;min-width:120px;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45}
+.hint{color:var(--muted);font-size:13px;margin:10px 0 0}
+.rot{display:none;color:var(--muted);font-size:13px;margin-top:8px}
+@media (orientation:portrait){.rot{display:block}}
+#result img{width:100%;background:#fff;border-radius:12px;border:1px solid var(--line);margin-top:10px;-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
+.hidden{display:none!important}
+.code{font-weight:700;letter-spacing:1px}
+</style>
+</head>
+<body>
+<main>
+  <section id="sign">
+    <h1 id="title">Unterschrift</h1>
+    <p class="sub" id="sub">Mit dem Finger im weißen Feld unterschreiben.</p>
+    <div class="card">
+      <label for="name">Name</label>
+      <input id="name" autocomplete="name" placeholder="Vor- und Nachname">
+      <div class="line"><canvas id="pad"></canvas></div>
+      <p class="rot">Tipp: Handy quer halten – dann ist mehr Platz.</p>
+      <div class="row">
+        <button class="btn" id="clear">Löschen</button>
+        <button class="btn primary" id="done" disabled>Fertig</button>
+      </div>
+    </div>
+  </section>
+  <section id="result" class="hidden">
+    <h1>Fast geschafft</h1>
+    <p class="sub">Schick das Bild jetzt an die Person am PC – z. B. per Teams oder Mail<span id="codeTxt"></span>.</p>
+    <div class="card">
+      <div class="row">
+        <button class="btn primary" id="share">Teilen …</button>
+        <a class="btn" id="save" download="Unterschrift.png">Bild speichern</a>
+      </div>
+      <img id="img" alt="Unterschrift">
+      <p class="hint">Klappt beides nicht? Bild lange gedrückt halten → „Teilen“ oder „Bild speichern“.</p>
+      <div class="row"><button class="btn" id="again">Neu unterschreiben</button></div>
+    </div>
+  </section>
+</main>
+<script>
+"use strict";
+// Parameter aus dem QR-Code (#r=Rolle&n=Name&t=Titel&c=Code) – fehlen sie, funktioniert die Seite trotzdem
+const P={};try{location.hash.slice(1).split("&").forEach(kv=>{const i=kv.indexOf("=");if(i>0)P[kv.slice(0,i)]=decodeURIComponent(kv.slice(i+1).replace(/\+/g," "))})}catch(e){}
+const $=s=>document.querySelector(s);
+if(P.r)$("#title").textContent="Unterschrift "+P.r;
+if(P.t)$("#sub").textContent=P.t+" – mit dem Finger im weißen Feld unterschreiben.";
+if(P.n)$("#name").value=P.n;
+if(P.c)$("#codeTxt").innerHTML=` (Code <span class="code"></span>)`,$("#codeTxt .code").textContent=P.c;
+
+const cv=$("#pad"),ctx=cv.getContext("2d");let strokes=[],cur=null;
+function size(){
+  const w=cv.clientWidth;const h=Math.max(150,Math.min(Math.round(w/2.6),window.innerHeight*0.55));
+  const dpr=window.devicePixelRatio||1;cv.style.height=h+"px";cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);redraw();
+}
+function redraw(){
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);
+  const dpr=window.devicePixelRatio||1;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#0b2a6b";ctx.lineWidth=2.6*dpr;
+  for(const s of strokes){ctx.beginPath();s.forEach((p,i)=>{const x=p[0]*cv.width,y=p[1]*cv.height;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});if(s.length===1){ctx.lineTo(s[0][0]*cv.width+0.1,s[0][1]*cv.height)}ctx.stroke()}
+}
+const pos=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]};
+cv.addEventListener("pointerdown",e=>{e.preventDefault();cv.setPointerCapture(e.pointerId);cur=[pos(e)];strokes.push(cur);redraw()});
+cv.addEventListener("pointermove",e=>{if(!cur)return;e.preventDefault();cur.push(pos(e));redraw();$("#done").disabled=false});
+const end=()=>{cur=null;if(strokes.length)$("#done").disabled=false};
+cv.addEventListener("pointerup",end);cv.addEventListener("pointercancel",end);
+window.addEventListener("resize",size);
+$("#clear").onclick=()=>{strokes=[];redraw();$("#done").disabled=true};
+
+let file=null;
+$("#done").onclick=()=>{
+  // auf die Unterschrift zuschneiden, weißer Hintergrund, Seitenverhältnis passend zum Formularfeld
+  let x0=1,y0=1,x1=0,y1=0;strokes.flat().forEach(([x,y])=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y)});
+  const W=cv.width,H=cv.height;const pad=0.03;
+  let sx=Math.max(0,(x0-pad))*W,sy=Math.max(0,(y0-pad*2))*H,sw=Math.min(W,(x1+pad)*W)-sx,sh=Math.min(H,(y1+pad*2)*H)-sy;
+  const ratio=4.7;if(sw/sh<ratio){const nw=sh*ratio;sx=Math.max(0,sx-(nw-sw)/2);sw=Math.min(W-sx,nw)}else{const nh=sw/ratio;sy=Math.max(0,sy-(nh-sh)/2);sh=Math.min(H-sy,nh)}
+  const out=document.createElement("canvas");out.width=900;out.height=Math.round(900*sh/sw);
+  const o=out.getContext("2d");o.fillStyle="#fff";o.fillRect(0,0,out.width,out.height);o.drawImage(cv,sx,sy,sw,sh,0,0,out.width,out.height);
+  const nm=($("#name").value||"").trim();
+  out.toBlob(b=>{
+    const safe=(P.r||"Unterschrift").replace(/[^\wäöüÄÖÜß-]+/g,"_");
+    const fname=`Unterschrift_${safe}${P.c?"_"+P.c:""}.png`;
+    file=new File([b],fname,{type:"image/png"});
+    const url=URL.createObjectURL(b);$("#img").src=url;$("#save").href=url;$("#save").download=fname;
+    $("#share").classList.toggle("hidden",!(navigator.canShare&&navigator.canShare({files:[file]})));
+    $("#sign").classList.add("hidden");$("#result").classList.remove("hidden");window.scrollTo(0,0);
+    $("#share").dataset.text=[P.t,P.r,nm,P.c?"Code "+P.c:""].filter(Boolean).join(" · ");
+  },"image/png");
+};
+$("#share").onclick=async()=>{try{await navigator.share({files:[file],title:"Unterschrift",text:$("#share").dataset.text})}catch(e){}};
+$("#again").onclick=()=>{$("#result").classList.add("hidden");$("#sign").classList.remove("hidden");strokes=[];size();$("#done").disabled=true};
+size();
+</script>
+</body>
+</html>
